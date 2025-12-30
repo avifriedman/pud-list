@@ -3,249 +3,148 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Podcast RSS Viewer</title>
+    <title>Podcast RSS Viewer - Debug Mode</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f6f8;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 { text-align: center; color: #2c3e50; }
-        .input-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #2ea44f;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover { background-color: #2c974b; }
-        #loading { text-align: center; display: none; color: #666; }
-        .episode-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .episode-item {
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid #eee;
-            padding: 10px 0;
-        }
-        .episode-index {
-            background: #2c3e50;
-            color: white;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 18px;
-            margin-left: 15px;
-            flex-shrink: 0;
-        }
-        .episode-content { flex: 1; }
-        .episode-title { font-weight: bold; margin-bottom: 5px; }
-        .episode-date { font-size: 0.85em; color: #777; }
-        .error { color: red; text-align: center; margin-top: 10px; }
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; direction: rtl; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input { width: 70%; padding: 10px; font-size: 16px; }
+        button { width: 25%; padding: 10px; font-size: 16px; background: #28a745; color: white; border: none; cursor: pointer; }
+        button:hover { background: #218838; }
+        #status { margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 4px; font-family: monospace; font-size: 12px; color: #333; min-height: 20px; }
+        .item { border-bottom: 1px solid #eee; padding: 10px 0; display: flex; align-items: center; }
+        .index { background: #007bff; color: white; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin-left: 10px; font-weight: bold; flex-shrink: 0; }
+        .details { flex-grow: 1; }
+        .date { font-size: 12px; color: #666; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>צפייה ברשימת פרקים</h1>
-    <p style="text-align:center; color:#666;">הדבק קישור RSS כדי לקבל את מספרי הפרקים להורדה</p>
-    
-    <div class="input-group">
-        <input type="text" id="rssUrl" placeholder="הדבק כאן קישור RSS..." />
-        <button onclick="fetchEpisodes()">הצג פרקים</button>
+    <h2>מציג פודקאסטים (גרסה יציבה)</h2>
+    <div>
+        <input type="text" id="rssUrl" placeholder="הדבק קישור RSS כאן..." value="https://www.spreaker.com/show/4393905/episodes/feed">
+        <button onclick="startFetch()">הצג פרקים</button>
     </div>
-
-    <div id="loading">טוען נתונים...</div>
-    <div id="error" class="error"></div>
     
-    <ul id="list" class="episode-list"></ul>
+    <!-- אזור לוגים כדי שנבין מה קורה -->
+    <div id="status">ממתין לפעולה...</div>
+    
+    <div id="results"></div>
 </div>
 
 <script>
-    async function fetchEpisodes() {
-        const urlInput = document.getElementById('rssUrl').value.trim();
-        const listContainer = document.getElementById('list');
-        const loading = document.getElementById('loading');
-        const errorDiv = document.getElementById('error');
-
-        if (!urlInput) return;
-
-        // Reset UI
-        listContainer.innerHTML = '';
-        errorDiv.textContent = '';
-        loading.style.display = 'block';
-
-        try {
-            // שימוש בפרוקסי כדי לעקוף חסימות CORS ולקבל את ה-XML
-            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(urlInput);
-            
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('Network response was not ok');
-            
-            const str = await response.text();
-            const data = new window.DOMParser().parseFromString(str, "text/xml");
-            
-            const items = data.querySelectorAll("item");
-            
-            if (items.length === 0) {
-                errorDiv.textContent = "לא נמצאו פרקים בפיד זה.";
-                loading.style.display = 'none';
-                return;
-            }
-
-            // יצירת הרשימה
-            // הסקריפט בפייתון סופר מ-1 (הכי חדש) והלאה. ה-XML מגיע באותו סדר.
-            items.forEach((item, index) => {
-                const title = item.querySelector("title").textContent;
-                const pubDate = item.querySelector("pubDate") ? item.querySelector("pubDate").textContent : "";
-                
-                // המרת תאריך למשהו קריא
-                let dateStr = "";
-                if (pubDate) {
-                    const d = new Date(pubDate);
-                    dateStr = d.toLocaleDateString('he-IL');
-                }
-
-                // המספר הסידורי להורדה (1 מבוסס)
-                const downloadIndex = index + 1;
-
-                const li = document.createElement('li');
-                li.className = 'episode-item';
-                li.innerHTML = `
-                    <div class="episode-index" title="מספר להורדה">${downloadIndex}</div>
-                    <div class="episode-content">
-                        <div class="episode-title">${title}</div>
-                        <div class="episode-date">${dateStr}</div>
-                    </div>
-                `;
-                listContainer.appendChild(li);
-            });
-
-        } catch (error) {
-            console.error(error);
-            errorDiv.textContent = "שגיאה בטעינת הפיד. וודא שהקישור תקין.";
-        } finally {
-            loading.style.display = 'none';
-        }
+    function log(msg, isError = false) {
+        const statusDiv = document.getElementById('status');
+        statusDiv.innerHTML += `<div>${isError ? '❌' : '✅'} ${msg}</div>`;
+        statusDiv.scrollTop = statusDiv.scrollHeight;
+        if (isError) statusDiv.style.backgroundColor = "#f8d7da";
     }
-<script>
-    async function fetchEpisodes() {
-        const urlInput = document.getElementById('rssUrl').value.trim();
-        const listContainer = document.getElementById('list');
-        const loading = document.getElementById('loading');
-        const errorDiv = document.getElementById('error');
 
-        if (!urlInput) return;
+    async function startFetch() {
+        const url = document.getElementById('rssUrl').value.trim();
+        const resultsDiv = document.getElementById('results');
+        const statusDiv = document.getElementById('status');
+        
+        // איפוס
+        resultsDiv.innerHTML = '';
+        statusDiv.innerHTML = 'מתחיל תהליך...';
+        statusDiv.style.backgroundColor = "#e9ecef";
 
-        // Reset UI
-        listContainer.innerHTML = '';
-        errorDiv.textContent = '';
-        loading.style.display = 'block';
+        if (!url) {
+            log("נא להזין קישור RSS", true);
+            return;
+        }
 
         try {
-            // שינוי לפרוקסי חזק יותר - corsproxy.io
-            // הוא מוסיף את הקישור שלנו אחרי הכתובת שלו
-            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(urlInput);
+            log(`מנסה לטעון את הכתובת: ${url}`);
+
+            // שיטה 1: שימוש ב-RSS2JSON (שירות המרה אמין)
+            // זה עוקף CORS וגם פותר בעיות של XML שבור
+            const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&api_key=0000000000000000000000000000000000000000&count=100`; 
             
-            const response = await fetch(proxyUrl);
+            log("פונה לשרת המרה...");
+            const response = await fetch(apiUrl);
             
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const str = await response.text();
-            
-            // בדיקה שהתקבל XML תקין ולא הודעת שגיאה מהפרוקסי
-            if (!str.startsWith('<') && !str.includes('xml')) {
-                throw new Error('התקבל תוכן שאינו XML תקין');
+                throw new Error(`שגיאת רשת: ${response.status}`);
             }
 
-            const data = new window.DOMParser().parseFromString(str, "text/xml");
-            
-            // בדיקה אם הייתה שגיאת פענוח XML
-            if (data.querySelector("parsererror")) {
-                throw new Error('שגיאה בפענוח ה-XML');
-            }
+            const data = await response.json();
 
-            const items = data.querySelectorAll("item");
-            
-            if (items.length === 0) {
-                errorDiv.textContent = "לא נמצאו פרקים בפיד זה (או שהפיד ריק).";
-                loading.style.display = 'none';
+            if (data.status !== 'ok') {
+                // אם השירות הזה נכשל, ננסה את השיטה הישנה (XML Proxy)
+                log("RSS2JSON נכשל, מנסה שיטת גיבוי (XML)...", true);
+                await fetchWithBackup(url);
                 return;
             }
 
-            // יצירת הרשימה
-            items.forEach((item, index) => {
-                // בדיקת תקינות לכל שדה כדי למנוע קריסה
-                const titleNode = item.querySelector("title");
-                const title = titleNode ? titleNode.textContent : "ללא כותרת";
-                
-                const pubDateNode = item.querySelector("pubDate");
-                const pubDate = pubDateNode ? pubDateNode.textContent : "";
-                
-                let dateStr = "";
-                if (pubDate) {
-                    try {
-                        const d = new Date(pubDate);
-                        dateStr = d.toLocaleDateString('he-IL');
-                    } catch (e) {
-                        dateStr = "תאריך לא ידוע";
-                    }
-                }
+            log(`התקבלו ${data.items.length} פרקים! בונה רשימה...`);
+            renderList(data.items);
 
-                // המספר הסידורי להורדה
-                const downloadIndex = index + 1;
-
-                const li = document.createElement('li');
-                li.className = 'episode-item';
-                li.innerHTML = `
-                    <div class="episode-index" title="מספר להורדה">${downloadIndex}</div>
-                    <div class="episode-content">
-                        <div class="episode-title">${title}</div>
-                        <div class="episode-date">${dateStr}</div>
-                    </div>
-                `;
-                listContainer.appendChild(li);
-            });
-
-        } catch (error) {
-            console.error("Full error details:", error);
-            errorDiv.innerHTML = `שגיאה בטעינת הפיד.<br><small style="color:#999">${error.message}</small>`;
-        } finally {
-            loading.style.display = 'none';
+        } catch (e) {
+            log(`שגיאה כללית: ${e.message}`, true);
+            console.error(e);
+            // ניסיון אחרון עם השיטה השנייה
+            await fetchWithBackup(url);
         }
     }
+
+    // פונקציית גיבוי למקרה שהראשונה נכשלת
+    async function fetchWithBackup(url) {
+        try {
+            log("מנסה דרך שרת גיבוי (AllOrigins)...");
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl);
+            const data = await response.json();
+            
+            if (!data.contents) throw new Error("לא התקבל תוכן");
+
+            // המרה ידנית מ-XML
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+            const items = xmlDoc.querySelectorAll("item");
+            
+            if (items.length === 0) throw new Error("לא נמצאו פרקים ב-XML");
+
+            const list = [];
+            items.forEach(item => {
+                list.push({
+                    title: item.querySelector("title")?.textContent || "ללא כותרת",
+                    pubDate: item.querySelector("pubDate")?.textContent || ""
+                });
+            });
+
+            log(`הצלחה בגיבוי! ${list.length} פרקים.`);
+            renderList(list);
+
+        } catch (e) {
+            log(`גם הגיבוי נכשל: ${e.message}`, true);
+        }
+    }
+
+    function renderList(items) {
+        const container = document.getElementById('results');
+        
+        // שים לב: ב-RSS רגיל, הפריט הראשון (אינדקס 0) הוא הכי חדש (מספר 1 להורדה)
+        items.forEach((item, index) => {
+            const downloadNum = index + 1;
+            let dateStr = item.pubDate;
+            try { dateStr = new Date(item.pubDate).toLocaleDateString('he-IL'); } catch(e){}
+
+            const div = document.createElement('div');
+            div.className = 'item';
+            div.innerHTML = `
+                <div class="index">${downloadNum}</div>
+                <div class="details">
+                    <div style="font-weight:bold">${item.title}</div>
+                    <div class="date">${dateStr}</div>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+        log("סיום - הרשימה מוצגת.");
+    }
+</script>
+
 </body>
 </html>

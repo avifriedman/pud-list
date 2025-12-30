@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podcast RSS Viewer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f8;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; color: #2c3e50; }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #2ea44f;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background-color: #2c974b; }
+        #loading { text-align: center; display: none; color: #666; }
+        .episode-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .episode-item {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding: 10px 0;
+        }
+        .episode-index {
+            background: #2c3e50;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            margin-left: 15px;
+            flex-shrink: 0;
+        }
+        .episode-content { flex: 1; }
+        .episode-title { font-weight: bold; margin-bottom: 5px; }
+        .episode-date { font-size: 0.85em; color: #777; }
+        .error { color: red; text-align: center; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>צפייה ברשימת פרקים</h1>
+    <p style="text-align:center; color:#666;">הדבק קישור RSS כדי לקבל את מספרי הפרקים להורדה</p>
+    
+    <div class="input-group">
+        <input type="text" id="rssUrl" placeholder="הדבק כאן קישור RSS..." />
+        <button onclick="fetchEpisodes()">הצג פרקים</button>
+    </div>
+
+    <div id="loading">טוען נתונים...</div>
+    <div id="error" class="error"></div>
+    
+    <ul id="list" class="episode-list"></ul>
+</div>
+
+<script>
+    async function fetchEpisodes() {
+        const urlInput = document.getElementById('rssUrl').value.trim();
+        const listContainer = document.getElementById('list');
+        const loading = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+
+        if (!urlInput) return;
+
+        // Reset UI
+        listContainer.innerHTML = '';
+        errorDiv.textContent = '';
+        loading.style.display = 'block';
+
+        try {
+            // שימוש בפרוקסי כדי לעקוף חסימות CORS ולקבל את ה-XML
+            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(urlInput);
+            
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Network response was not ok');
+            
+            const str = await response.text();
+            const data = new window.DOMParser().parseFromString(str, "text/xml");
+            
+            const items = data.querySelectorAll("item");
+            
+            if (items.length === 0) {
+                errorDiv.textContent = "לא נמצאו פרקים בפיד זה.";
+                loading.style.display = 'none';
+                return;
+            }
+
+            // יצירת הרשימה
+            // הסקריפט בפייתון סופר מ-1 (הכי חדש) והלאה. ה-XML מגיע באותו סדר.
+            items.forEach((item, index) => {
+                const title = item.querySelector("title").textContent;
+                const pubDate = item.querySelector("pubDate") ? item.querySelector("pubDate").textContent : "";
+                
+                // המרת תאריך למשהו קריא
+                let dateStr = "";
+                if (pubDate) {
+                    const d = new Date(pubDate);
+                    dateStr = d.toLocaleDateString('he-IL');
+                }
+
+                // המספר הסידורי להורדה (1 מבוסס)
+                const downloadIndex = index + 1;
+
+                const li = document.createElement('li');
+                li.className = 'episode-item';
+                li.innerHTML = `
+                    <div class="episode-index" title="מספר להורדה">${downloadIndex}</div>
+                    <div class="episode-content">
+                        <div class="episode-title">${title}</div>
+                        <div class="episode-date">${dateStr}</div>
+                    </div>
+                `;
+                listContainer.appendChild(li);
+            });
+
+        } catch (error) {
+            console.error(error);
+            errorDiv.textContent = "שגיאה בטעינת הפיד. וודא שהקישור תקין.";
+        } finally {
+            loading.style.display = 'none';
+        }
+    }
+</script>
+
+</body>
+</html>
